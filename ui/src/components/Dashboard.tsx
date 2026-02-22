@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import {
   Ticket,
   fetchTickets,
@@ -7,6 +8,46 @@ import {
   STATUS_META,
   defaultMeta,
 } from "../lib/ticketUtils";
+
+// Palette for pie slices
+const PIE_COLORS = [
+  "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6",
+  "#06b6d4", "#f97316", "#84cc16", "#ec4899", "#14b8a6",
+];
+
+function MiniPieChart({
+  data,
+  label,
+}: {
+  data: { name: string; value: number }[];
+  label: string;
+}) {
+  if (data.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 flex flex-col items-center">
+      <p className="text-sm font-semibold text-slate-700 mb-2">{label}</p>
+      <ResponsiveContainer width="100%" height={200}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={50}
+            outerRadius={80}
+            paddingAngle={2}
+            dataKey="value"
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value: number) => [`${value} tickets`, ""]} />
+          <Legend iconType="circle" iconSize={8} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { data, isLoading, isError } = useQuery<Ticket[]>({
@@ -21,6 +62,18 @@ export default function Dashboard() {
   for (const t of tickets) {
     statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1;
   }
+  const statusPieData = Object.entries(statusCounts).map(([name, value]) => ({
+    name: STATUS_META[name]?.label ?? name,
+    value,
+  }));
+
+  // Count by source (Webapp vs Mobile)
+  const sourceCounts: Record<string, number> = {};
+  for (const t of tickets) {
+    const src = t.source ?? "Unknown";
+    sourceCounts[src] = (sourceCounts[src] ?? 0) + 1;
+  }
+  const sourcePieData = Object.entries(sourceCounts).map(([name, value]) => ({ name, value }));
 
   // Count by tag
   const tagCounts: Record<string, number> = {};
@@ -29,7 +82,10 @@ export default function Dashboard() {
       tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
     }
   }
-  const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
+  const tagPieData = Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name, value]) => ({ name, value }));
 
   // Count by assigned_to
   const assigneeCounts: Record<string, number> = {};
@@ -101,63 +157,14 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {/* Status cards */}
-          <div>
-            <h2 className="text-base font-semibold text-slate-700 mb-3">By Status</h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {Object.entries(statusCounts).map(([status, count]) => {
-                const m = STATUS_META[status] ?? defaultMeta(status);
-                return (
-                  <Link
-                    key={status}
-                    to={`/inbox?status=${status}`}
-                    className={`rounded-xl border p-5 shadow-sm hover:shadow-md transition-shadow ${m.bg}`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${m.dot}`} />
-                      <span className={`text-xs font-semibold uppercase tracking-wide ${m.color}`}>
-                        {m.label}
-                      </span>
-                    </div>
-                    <p className={`text-3xl font-bold ${m.color}`}>{count}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {tickets.length > 0 ? Math.round((count / tickets.length) * 100) : 0}% of total
-                    </p>
-                  </Link>
-                );
-              })}
-            </div>
+          {/* Pie charts row: Status / Source / Tags */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <MiniPieChart data={statusPieData} label="By Status" />
+            <MiniPieChart data={sourcePieData} label="By Source" />
+            {tagPieData.length > 0 && <MiniPieChart data={tagPieData} label="By Tag" />}
           </div>
 
-          {/* Tags */}
-          {sortedTags.length > 0 && (
-            <div>
-              <h2 className="text-base font-semibold text-slate-700 mb-3">By Tag</h2>
-              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                {sortedTags.map(([tag, count], i) => {
-                  const pct = tickets.length > 0 ? Math.round((count / tickets.length) * 100) : 0;
-                  return (
-                    <Link
-                      key={tag}
-                      to={`/inbox?tag=${encodeURIComponent(tag)}`}
-                      className={`flex items-center gap-4 px-5 py-3 hover:bg-slate-50 transition-colors ${i !== 0 ? "border-t border-slate-100" : ""}`}
-                    >
-                      <span className="w-32 text-sm font-medium text-slate-700 truncate">{tag}</span>
-                      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-indigo-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="w-8 text-right text-sm font-semibold text-slate-600">{count}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Assignees */}
+          {/* By Assignee */}
           {sortedAssignees.length > 0 && (
             <div>
               <h2 className="text-base font-semibold text-slate-700 mb-3">By Assignee</h2>
@@ -193,7 +200,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Languages */}
+          {/* By Language */}
           {sortedLanguages.length > 0 && (
             <div>
               <h2 className="text-base font-semibold text-slate-700 mb-3">By Language</h2>
@@ -235,7 +242,7 @@ export default function Dashboard() {
                       className={`flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors ${i !== 0 ? "border-t border-slate-100" : ""}`}
                     >
                       <span className={`h-2 w-2 rounded-full flex-shrink-0 ${m.dot}`} />
-                      <span className="flex-1 text-sm font-medium text-slate-800 truncate">{cleanAiSubject(t.ai_subject)}</span>
+                      <span className="flex-1 text-sm font-medium text-slate-800 truncate">{cleanAiSubject(t.ai_subject, t.id)}</span>
                       <span className={`text-xs font-semibold ${m.color}`}>{m.label}</span>
                       <span className="text-xs text-slate-400 whitespace-nowrap">
                         {new Date(t.created_at).toLocaleDateString()}

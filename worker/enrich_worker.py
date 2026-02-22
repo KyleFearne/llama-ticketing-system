@@ -1,6 +1,9 @@
 import logging
 from db import get_db_connection
-from ai_enrichment import detect_source, detect_language, generate_ai_subject, generate_suggested_response
+from ai_enrichment import (
+    detect_source, detect_language, generate_ai_subject, generate_suggested_response,
+    generate_troubleshooting_steps, generate_follow_up_response, INSUFFICIENT_CONTENT_MARKER,
+)
 from redis_queue import pop_ticket, invalidate_tickets_cache
 import redis.exceptions
 
@@ -46,10 +49,19 @@ def enrich_ticket(ticket_id: int):
     language = detect_language(t["body"])
     assigned_to = get_next_assignee(cur)
 
-    # Only generate a suggested response for non-closed tickets
-    suggested_response = None
-    if t["status"] != "closed":
-        suggested_response = generate_suggested_response(t["body"])
+    # Handle tickets with insufficient / no meaningful content
+    if ai_subject == INSUFFICIENT_CONTENT_MARKER:
+        ai_subject = "Auto-Closed: No content"
+        status = "closed"
+        suggested_response = generate_follow_up_response()
+        troubleshooting_steps = None
+    else:
+        status = t["status"]
+        # Only generate a suggested response for non-closed tickets
+        suggested_response = None
+        if status != "closed":
+            suggested_response = generate_suggested_response(t["body"])
+        troubleshooting_steps = generate_troubleshooting_steps(t["body"])
 
     cur.execute("""
         UPDATE tickets
@@ -58,9 +70,11 @@ def enrich_ticket(ticket_id: int):
             language=%s,
             assigned_to=%s,
             suggested_response=%s,
+            troubleshooting_steps=%s,
+            status=%s,
             enrichment_done=TRUE
         WHERE id=%s
-    """, (source, ai_subject, language, assigned_to, suggested_response, ticket_id))
+    """, (source, ai_subject, language, assigned_to, suggested_response, troubleshooting_steps, status, ticket_id))
 
     conn.commit()
     cur.close()
