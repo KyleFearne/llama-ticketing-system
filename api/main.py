@@ -36,7 +36,7 @@ def startup_event():
             category TEXT,              -- AI category / tag
             source TEXT,                -- Mobile or Webapp
             language TEXT,              -- detected ticket language
-            assigned_to TEXT,           -- assigned employee name
+            assigned_to INTEGER REFERENCES employees(id) ON DELETE SET NULL,
             suggested_response TEXT,    -- AI suggested response
             enrichment_done BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT now()
@@ -56,12 +56,39 @@ def startup_event():
     # Migrations for existing databases
     _safe_new_cols = {
         "language": "TEXT",
-        "assigned_to": "TEXT",
         "suggested_response": "TEXT",
         "troubleshooting_steps": "TEXT",
     }
     for col, definition in _safe_new_cols.items():
         cur.execute(f"ALTER TABLE tickets ADD COLUMN IF NOT EXISTS {col} {definition};")
+
+    # Migrate assigned_to from TEXT (name) to INTEGER FK referencing employees(id)
+    cur.execute("""
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'tickets' AND column_name = 'assigned_to'
+        ) THEN
+            ALTER TABLE tickets ADD COLUMN assigned_to INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+        ELSIF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'tickets' AND column_name = 'assigned_to' AND data_type = 'text'
+        ) THEN
+            ALTER TABLE tickets ADD COLUMN assigned_to_id INTEGER;
+            UPDATE tickets t SET assigned_to_id = e.id FROM employees e WHERE t.assigned_to = e.name;
+            -- Warn about tickets whose assigned_to name had no matching employee
+            IF EXISTS (SELECT 1 FROM tickets WHERE assigned_to IS NOT NULL AND assigned_to_id IS NULL) THEN
+                RAISE NOTICE 'Some tickets had an unrecognised assigned_to name and will be set to NULL: %',
+                    (SELECT string_agg(id::text, ', ') FROM tickets WHERE assigned_to IS NOT NULL AND assigned_to_id IS NULL);
+            END IF;
+            ALTER TABLE tickets DROP COLUMN assigned_to;
+            ALTER TABLE tickets RENAME COLUMN assigned_to_id TO assigned_to;
+            ALTER TABLE tickets ADD CONSTRAINT tickets_assigned_to_fkey
+                FOREIGN KEY (assigned_to) REFERENCES employees(id) ON DELETE SET NULL;
+        END IF;
+    END $$;
+    """)
 
     conn.commit()
     cur.close()
@@ -93,7 +120,15 @@ def get_tickets():
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM tickets;")
+    cur.execute("""
+        SELECT t.id, t.external_id, t.subject, t.body, t.tags, t.status,
+               t.ai_subject, t.category, t.source, t.language,
+               e.name AS assigned_to,
+               t.suggested_response, t.troubleshooting_steps,
+               t.enrichment_done, t.created_at
+        FROM tickets t
+        LEFT JOIN employees e ON e.id = t.assigned_to
+    """)
     tickets = [dict(t) for t in cur.fetchall()]
     cur.close()
     conn.close()
@@ -117,7 +152,14 @@ def update_ticket(ticket_id: int, update: TicketUpdate):
     if update.status is not None:
         fields["status"] = update.status
     if update.assigned_to is not None:
-        fields["assigned_to"] = update.assigned_to
+        # Resolve employee name to FK integer id
+        cur.execute("SELECT id FROM employees WHERE name = %s", (update.assigned_to,))
+        emp_row = cur.fetchone()
+        if emp_row is None:
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=400, detail="Employee not found")
+        fields["assigned_to"] = emp_row["id"]
 
     # Validate all keys are in the allowed set (defence-in-depth)
     if not fields:
@@ -127,7 +169,19 @@ def update_ticket(ticket_id: int, update: TicketUpdate):
     set_clause = ", ".join(f"{k} = %s" for k in fields)
     values = list(fields.values()) + [ticket_id]
 
-    cur.execute(f"UPDATE tickets SET {set_clause} WHERE id = %s RETURNING *", values)
+    cur.execute(f"""
+        WITH updated AS (
+            UPDATE tickets SET {set_clause} WHERE id = %s RETURNING id
+        )
+        SELECT t.id, t.external_id, t.subject, t.body, t.tags, t.status,
+               t.ai_subject, t.category, t.source, t.language,
+               e.name AS assigned_to,
+               t.suggested_response, t.troubleshooting_steps,
+               t.enrichment_done, t.created_at
+        FROM tickets t
+        LEFT JOIN employees e ON e.id = t.assigned_to
+        JOIN updated ON updated.id = t.id
+    """, values)
     row = cur.fetchone()
     conn.commit()
     cur.close()
