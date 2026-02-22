@@ -1,113 +1,67 @@
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-
-type Ticket = {
-  id: number;
-  subject: string;
-  body: string;
-  tags: string[];
-  status: string;
-  ai_subject?: string | null;
-  category?: string | null;
-  suggested_assignee?: string | null;
-  created_at: string;
-};
-
-async function fetchTickets(): Promise<Ticket[]> {
-  const res = await fetch("/api/tickets");
-  if (!res.ok) {
-    throw new Error("Failed to fetch tickets");
-  }
-  return res.json();
-}
+import { Routes, Route, NavLink, Navigate } from "react-router-dom";
+import Dashboard from "./components/Dashboard";
+import TicketInbox from "./components/TicketInbox";
 
 export default function App() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["tickets"],
-    queryFn: fetchTickets,
-  });
-
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-
-  const tickets = data ?? [];
-  const selected =
-    tickets.find((t) => t.id === selectedId) ?? tickets[0] ?? null;
-
   return (
-    <div style={{ fontFamily: "Arial", padding: "20px" }}>
-      <h1>Ticket System</h1>
-
-      {isLoading && <p>Loading tickets...</p>}
-      {isError && <p>Failed to load tickets.</p>}
-
-      {!isLoading && (
-        <div style={{ display: "flex", gap: "20px" }}>
-          {/* Ticket List */}
-          <div style={{ width: "40%", borderRight: "1px solid #ddd" }}>
-            {tickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                onClick={() => setSelectedId(ticket.id)}
-                style={{
-                  padding: "10px",
-                  cursor: "pointer",
-                  background:
-                    selected?.id === ticket.id ? "#f0f0f0" : "white",
-                  borderBottom: "1px solid #eee",
-                }}
-              >
-                <strong>{ticket.subject}</strong>
-                <div style={{ fontSize: "12px", color: "#666" }}>
-                  Status: {ticket.status}
-                </div>
-              </div>
-            ))}
+    <div className="flex min-h-screen bg-slate-100 font-sans">
+      {/* Sidebar */}
+      <aside className="flex w-56 flex-shrink-0 flex-col bg-slate-900 text-slate-300">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-700">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+            <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
           </div>
-
-          {/* Ticket Detail */}
-          <div style={{ width: "60%", paddingLeft: "20px" }}>
-            {selected ? (
-              <>
-                <h2>{selected.subject}</h2>
-                <p>
-                  <strong>Status:</strong> {selected.status}
-                </p>
-                <p>
-                  <strong>Created:</strong>{" "}
-                  {new Date(selected.created_at).toLocaleString()}
-                </p>
-
-                {selected.tags?.length > 0 && (
-                  <p>
-                    <strong>Tags:</strong> {selected.tags.join(", ")}
-                  </p>
-                )}
-
-                {selected.ai_subject && (
-                  <>
-                    <h3>AI Suggested Subject</h3>
-                    <pre>{selected.ai_subject}</pre>
-                  </>
-                )}
-
-                <h3>Body</h3>
-                <pre
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    background: "#fafafa",
-                    padding: "10px",
-                    border: "1px solid #eee",
-                  }}
-                >
-                  {selected.body}
-                </pre>
-              </>
-            ) : (
-              <p>No tickets available.</p>
-            )}
-          </div>
+          <span className="text-sm font-bold text-white tracking-wide">SupportDesk</span>
         </div>
-      )}
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-slate-700 text-white"
+                  : "hover:bg-slate-800 hover:text-white"
+              }`
+            }
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            Dashboard
+          </NavLink>
+
+          <NavLink
+            to="/inbox"
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-slate-700 text-white"
+                  : "hover:bg-slate-800 hover:text-white"
+              }`
+            }
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Inbox
+          </NavLink>
+        </nav>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto p-6">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/inbox" element={<TicketInbox />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
     </div>
   );
 }
