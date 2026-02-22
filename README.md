@@ -105,7 +105,7 @@ The server listens on `http://localhost:11434` by default.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/KyleFearne/ticketing-sys.git
+git clone https://github.com/KyleFearne/llama-ticketing-system.git
 cd ticketing-sys
 ```
 
