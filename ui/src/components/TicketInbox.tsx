@@ -47,7 +47,7 @@ export default function TicketInbox() {
   });
 
   const patchTicket = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { status?: string; assigned_to?: string | null } }) =>
+    mutationFn: ({ id, data }: { id: number; data: { status?: string; assigned_to?: string } }) =>
       updateTicket(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
@@ -303,11 +303,10 @@ export default function TicketInbox() {
                 <select
                   value={selected.assigned_to ?? ""}
                   onChange={(e) =>
-                    patchTicket.mutate({ id: selected.id, data: { assigned_to: e.target.value || null } })
+                    patchTicket.mutate({ id: selected.id, data: { assigned_to: e.target.value } })
                   }
                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                 >
-                  <option value="">Unassigned</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.name}>
                       {emp.name}

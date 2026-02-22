@@ -40,7 +40,7 @@ export async function fetchEmployees(): Promise<Employee[]> {
 
 export async function updateTicket(
   id: number,
-  data: { status?: string; assigned_to?: string | null }
+  data: { status?: string; assigned_to?: string }
 ): Promise<Ticket> {
   const res = await fetch(`/api/tickets/${id}`, {
     method: "PATCH",

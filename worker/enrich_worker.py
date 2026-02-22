@@ -12,6 +12,20 @@ import redis.exceptions
 RECONCILE_AFTER = 6  # exactly 60 seconds of idle time (6 × 10s timeout)
 
 
+def get_next_assignee(cur):
+    """Return the id of the employee with the fewest assigned tickets."""
+    cur.execute("""
+        SELECT e.id, e.name, COUNT(t.id) AS cnt
+        FROM employees e
+        LEFT JOIN tickets t ON t.assigned_to = e.id
+        GROUP BY e.id, e.name
+        ORDER BY cnt ASC, e.name ASC
+        LIMIT 1
+    """)
+    row = cur.fetchone()
+    return row["id"] if row else None
+
+
 def enrich_ticket(ticket_id: int):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -33,6 +47,7 @@ def enrich_ticket(ticket_id: int):
     source = detect_source(t["body"])
     ai_subject = generate_ai_subject(t["body"])
     language = detect_language(t["body"])
+    assigned_to = get_next_assignee(cur)
 
     # Handle tickets with insufficient / no meaningful content
     if ai_subject == INSUFFICIENT_CONTENT_MARKER:
@@ -53,12 +68,13 @@ def enrich_ticket(ticket_id: int):
         SET source=%s,
             ai_subject=%s,
             language=%s,
+            assigned_to=%s,
             suggested_response=%s,
             troubleshooting_steps=%s,
             status=%s,
             enrichment_done=TRUE
         WHERE id=%s
-    """, (source, ai_subject, language, suggested_response, troubleshooting_steps, status, ticket_id))
+    """, (source, ai_subject, language, assigned_to, suggested_response, troubleshooting_steps, status, ticket_id))
 
     conn.commit()
     cur.close()
