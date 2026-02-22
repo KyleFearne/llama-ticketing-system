@@ -37,6 +37,7 @@ services:
     build: ./worker
     depends_on:
       - postgres
+      - redis
       - init_db
     command: >
       sh -c "./wait-for-it.sh postgres:5432 -- python live_ingest_worker.py"
@@ -47,6 +48,7 @@ services:
     build: ./worker
     depends_on:
       - postgres
+      - redis
       - init_db
     command: >
       sh -c "./wait-for-it.sh postgres:5432 -- python enrich_worker.py"
