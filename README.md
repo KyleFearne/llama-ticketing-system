@@ -106,7 +106,7 @@ The server listens on `http://localhost:11434` by default.
 
 ```bash
 git clone https://github.com/KyleFearne/llama-ticketing-system.git
-cd ticketing-sys
+cd llama-ticketing-system
 ```
 
 ### 2. Start all services
