@@ -7,13 +7,13 @@ def ask_llm(prompt: str) -> str:
     response = requests.post(
         OLLAMA_URL,
         json={
-            "model": "llama3.2:8b",
+            "model": "llama3.1:8b",
             "messages": [
                 {"role": "user", "content": prompt}
             ],
             "stream": False,
         },
-        timeout=120,
+        timeout=300,
     )
 
     response.raise_for_status()

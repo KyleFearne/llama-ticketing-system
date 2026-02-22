@@ -1,6 +1,6 @@
 # Ticketing System
 
-An AI-powered support ticketing system that ingests ticket files, enriches them with an LLM (Llama 3.2 via Ollama), and exposes a React dashboard for managing tickets.
+An AI-powered support ticketing system that ingests ticket files, enriches them with an LLM (Llama 3.1), and exposes a React dashboard for managing tickets.
 
 ## Architecture
 
@@ -27,7 +27,7 @@ An AI-powered support ticketing system that ingests ticket files, enriches them 
                                         │
                                ┌────────▼────────┐
                                │  Ollama          │
-                               │  llama3.2:8b     │
+                               │  llama3.1:8b     │
                                │  (host machine)  │
                                └─────────────────┘
 ```
@@ -50,7 +50,7 @@ An AI-powered support ticketing system that ingests ticket files, enriches them 
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (v3.8+)
 - [Ollama](https://ollama.com/download) installed and running on your **host machine**
-- The `llama3.2:8b` model pulled into Ollama
+- The `llama3.1:8b` model pulled into Ollama
 
 ---
 
@@ -66,17 +66,17 @@ Download and install from [https://ollama.com/download](https://ollama.com/downl
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-### 2. Pull the Llama 3.2 model
+### 2. Pull the Llama 3.1 model
 
 ```bash
-ollama pull llama3.2:8b
+ollama pull llama3.1:8b
 ```
 
 This downloads the ~5 GB quantised model. Once complete, verify it is available:
 
 ```bash
 ollama list
-# Should show: llama3.2:8b
+# Should show: llama3.1:8b
 ```
 
 ### 3. Start the Ollama server
@@ -103,17 +103,11 @@ The server listens on `http://localhost:11434` by default.
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/KyleFearne/ticketing-sys.git
 cd ticketing-sys
 ```
 
-### 2. Create the ticket data directory
-
-```bash
-mkdir -p data/tickets
-```
-
-### 3. Start all services
+### 2. Start all services
 
 ```bash
 docker compose up --build
@@ -121,14 +115,14 @@ docker compose up --build
 
 Docker Compose will:
 1. Start PostgreSQL and Redis.
-2. Run `init_db` to create the schema and seed employees.
+2. Run `init_db` to create the schema and our 4 seed employees.
 3. Start the `api`, `live_ingest_worker`, `enrich_worker`, and `ui` services.
 
-### 4. Open the dashboard
+### 3. Open the dashboard
 
 Navigate to [http://localhost:3000](http://localhost:3000).
 
-### 5. Add tickets
+### 4. Add tickets as necessary
 
 Drop `.txt` ticket files into `./data/tickets/`. The `live_ingest_worker` polls this directory every 5 seconds and automatically ingests new files.
 
@@ -231,6 +225,33 @@ Example request body:
 
 ---
 
+## Configuration
+
+All configuration is handled via environment variables. The defaults used in `docker-compose.yaml` are:
+
+| Variable | Default | Used by |
+|---|---|---|
+| `POSTGRES_USER` | `studyflash` | `postgres`, `api`, `worker` |
+| `POSTGRES_PASSWORD` | `studyFlash123!` | `postgres`, `api`, `worker` |
+| `POSTGRES_DB` | `studyflash` | `postgres`, `api`, `worker` |
+| `OLLAMA_URL` | `http://host.docker.internal:11434/api/chat` | `worker/ollama_client.py` |
+
+To change the Ollama endpoint, update `OLLAMA_URL` in `worker/ollama_client.py` or pass it as an environment variable in `docker-compose.yaml`.
+
+---
+
+## Stopping the Application
+
+```bash
+docker compose down
+```
+
+To also remove persisted volumes (database data):
+
+```bash
+docker compose down -v
+```
+
 ## Project Structure
 
 ```
@@ -273,30 +294,3 @@ ticketing-sys/
 ```
 
 ---
-
-## Configuration
-
-All configuration is handled via environment variables. The defaults used in `docker-compose.yaml` are:
-
-| Variable | Default | Used by |
-|---|---|---|
-| `POSTGRES_USER` | `studyflash` | `postgres`, `api`, `worker` |
-| `POSTGRES_PASSWORD` | `studyFlash123!` | `postgres`, `api`, `worker` |
-| `POSTGRES_DB` | `studyflash` | `postgres`, `api`, `worker` |
-| `OLLAMA_URL` | `http://host.docker.internal:11434/api/chat` | `worker/ollama_client.py` |
-
-To change the Ollama endpoint, update `OLLAMA_URL` in `worker/ollama_client.py` or pass it as an environment variable in `docker-compose.yaml`.
-
----
-
-## Stopping the Application
-
-```bash
-docker compose down
-```
-
-To also remove persisted volumes (database data):
-
-```bash
-docker compose down -v
-```
