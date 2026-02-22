@@ -1,6 +1,8 @@
+import json
 from fastapi import FastAPI
 from db import get_db_connection
 from models import Ticket
+from cache import get_redis_client, CACHE_TTL
 
 app = FastAPI()
 
@@ -37,10 +39,25 @@ def health_check():
 
 @app.get("/tickets", response_model=list[Ticket])
 def get_tickets():
+    try:
+        cache = get_redis_client()
+        cached = cache.get("tickets")
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("SELECT * FROM tickets;")
-    tickets = cur.fetchall()
+    tickets = [dict(t) for t in cur.fetchall()]
     cur.close()
     conn.close()
+
+    try:
+        cache = get_redis_client()
+        cache.setex("tickets", CACHE_TTL, json.dumps(tickets, default=str))
+    except Exception:
+        pass
+
     return tickets

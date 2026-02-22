@@ -31,11 +31,14 @@ def ingest_ticket(file_path):
         INSERT INTO tickets (external_id,subject, body, tags, status, enrichment_done)
         VALUES (%s, %s, %s, %s, %s, FALSE)
         ON CONFLICT (external_id) DO NOTHING
+        RETURNING id
     """, (external_id, subject, body.strip(), tags, status))
+    row = cur.fetchone()
     conn.commit()
     cur.close()
     conn.close()
     print(f"Ingested ticket: {subject} | tags: {tags} | status: {status}")
+    return row["id"] if row else None
 
 
 def ingest_all_tickets():
