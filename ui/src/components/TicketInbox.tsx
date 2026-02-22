@@ -1,11 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Ticket,
+  Employee,
   fetchTickets,
+  fetchEmployees,
+  updateTicket,
   cleanAiSubject,
   STATUS_META,
+  EDITABLE_STATUSES,
   defaultMeta,
 } from "../lib/ticketUtils";
 
@@ -24,11 +28,27 @@ export default function TicketInbox() {
   const filterStatus = searchParams.get("status") ?? "";
   const filterTag = searchParams.get("tag") ?? "";
   const filterAssignee = searchParams.get("assignee") ?? "";
+  const filterLanguage = searchParams.get("language") ?? "";
   const selectedParam = searchParams.get("selected");
+
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery<Ticket[]>({
     queryKey: ["tickets"],
     queryFn: fetchTickets,
+  });
+
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ["employees"],
+    queryFn: fetchEmployees,
+  });
+
+  const patchTicket = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { status?: string; assigned_to?: string } }) =>
+      updateTicket(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+    },
   });
 
   const tickets = data ?? [];
@@ -37,30 +57,33 @@ export default function TicketInbox() {
   const [activeStatus, setActiveStatus] = useState(filterStatus);
   const [activeTag, setActiveTag] = useState(filterTag);
   const [activeAssignee, setActiveAssignee] = useState(filterAssignee);
+  const [activeLanguage, setActiveLanguage] = useState(filterLanguage);
   const [selectedId, setSelectedId] = useState<number | null>(
     selectedParam ? Number(selectedParam) : null
   );
 
-  // Sync URL params → local state on mount
   useEffect(() => {
     if (filterStatus) setActiveStatus(filterStatus);
     if (filterTag) setActiveTag(filterTag);
     if (filterAssignee) setActiveAssignee(filterAssignee);
-  }, [filterStatus, filterTag, filterAssignee]);
+    if (filterLanguage) setActiveLanguage(filterLanguage);
+  }, [filterStatus, filterTag, filterAssignee, filterLanguage]);
 
-  // All statuses and tags for filter bar
   const statuses = Array.from(new Set(tickets.map((t) => t.status)));
   const allTags = Array.from(new Set(tickets.flatMap((t) => t.tags ?? [])));
+  const allLanguages = Array.from(
+    new Set(tickets.map((t) => t.language).filter(Boolean) as string[])
+  );
 
   const filtered = tickets.filter((t) => {
     if (activeStatus && t.status !== activeStatus) return false;
     if (activeTag && !(t.tags ?? []).includes(activeTag)) return false;
-    if (activeAssignee && t.suggested_assignee !== activeAssignee) return false;
+    if (activeAssignee && t.assigned_to !== activeAssignee) return false;
+    if (activeLanguage && t.language !== activeLanguage) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
-        t.subject.toLowerCase().includes(q) ||
-        cleanAiSubject(t.ai_subject, t.subject).toLowerCase().includes(q) ||
+        cleanAiSubject(t.ai_subject).toLowerCase().includes(q) ||
         t.body.toLowerCase().includes(q) ||
         (t.tags ?? []).some((tag) => tag.toLowerCase().includes(q))
       );
@@ -83,6 +106,7 @@ export default function TicketInbox() {
     setActiveStatus("");
     setActiveTag("");
     setActiveAssignee("");
+    setActiveLanguage("");
     setSearchParams({});
   }
 
@@ -131,7 +155,16 @@ export default function TicketInbox() {
               #{tag}
             </button>
           ))}
-          {(activeStatus || activeTag) && (
+          {allLanguages.map((lang) => (
+            <button
+              key={lang}
+              onClick={() => setActiveLanguage(activeLanguage === lang ? "" : lang)}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${activeLanguage === lang ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+            >
+              🌐 {lang}
+            </button>
+          ))}
+          {(activeStatus || activeTag || activeAssignee || activeLanguage) && (
             <button onClick={clearFilter} className="text-xs text-rose-500 hover:text-rose-700 ml-1">
               Clear
             </button>
@@ -170,7 +203,7 @@ export default function TicketInbox() {
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <span className="text-sm font-semibold text-slate-800 line-clamp-1 flex-1">
-                    {cleanAiSubject(ticket.ai_subject, ticket.subject)}
+                    {cleanAiSubject(ticket.ai_subject)}
                   </span>
                   <span className="text-xs text-slate-400 whitespace-nowrap">{timeAgo(ticket.created_at)}</span>
                 </div>
@@ -216,13 +249,45 @@ export default function TicketInbox() {
                 <span className="text-xs text-slate-400">#{selected.id}</span>
               </div>
               <h1 className="text-xl font-bold text-slate-900">
-                {cleanAiSubject(selected.ai_subject, selected.subject)}
+                {cleanAiSubject(selected.ai_subject)}
               </h1>
-              {selected.ai_subject && cleanAiSubject(selected.ai_subject, selected.subject) !== selected.subject && (
-                <p className="mt-1 text-xs text-slate-400 line-clamp-2">
-                  <span className="font-medium">Original:</span> {selected.subject}
-                </p>
-              )}
+            </div>
+
+            {/* Status & Assignee Controls */}
+            <div className="flex flex-wrap gap-3 mb-6">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Status</label>
+                <select
+                  value={selected.status}
+                  onChange={(e) =>
+                    patchTicket.mutate({ id: selected.id, data: { status: e.target.value } })
+                  }
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  {EDITABLE_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_META[s]?.label ?? s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Assignee</label>
+                <select
+                  value={selected.assigned_to ?? ""}
+                  onChange={(e) =>
+                    patchTicket.mutate({ id: selected.id, data: { assigned_to: e.target.value || undefined } })
+                  }
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="">Unassigned</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.name}>
+                      {emp.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Meta grid */}
@@ -237,16 +302,16 @@ export default function TicketInbox() {
                   <p className="text-slate-700 capitalize">{selected.source}</p>
                 </div>
               )}
+              {selected.language && (
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Language</p>
+                  <p className="text-slate-700">{selected.language}</p>
+                </div>
+              )}
               {selected.category && (
                 <div>
                   <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Category</p>
                   <p className="text-slate-700">{selected.category}</p>
-                </div>
-              )}
-              {selected.suggested_assignee && (
-                <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Suggested Assignee</p>
-                  <p className="text-slate-700">{selected.suggested_assignee}</p>
                 </div>
               )}
             </div>
@@ -266,12 +331,22 @@ export default function TicketInbox() {
             )}
 
             {/* Body */}
-            <div>
+            <div className="mb-6">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Message</p>
               <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed shadow-sm">
                 {selected.body}
               </div>
             </div>
+
+            {/* Suggested Response (only for non-closed tickets) */}
+            {selected.status !== "closed" && selected.suggested_response && (
+              <div>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Suggested Response</p>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {selected.suggested_response}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

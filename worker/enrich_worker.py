@@ -1,6 +1,6 @@
 import logging
 from db import get_db_connection
-from ai_enrichment import detect_source, generate_ai_subject
+from ai_enrichment import detect_source, detect_language, generate_ai_subject, generate_suggested_response
 from redis_queue import pop_ticket, invalidate_tickets_cache
 import redis.exceptions
 
@@ -9,12 +9,26 @@ import redis.exceptions
 RECONCILE_AFTER = 6  # exactly 60 seconds of idle time (6 × 10s timeout)
 
 
+def get_next_assignee(cur):
+    """Return the name of the employee with the fewest assigned tickets."""
+    cur.execute("""
+        SELECT e.name, COUNT(t.id) AS cnt
+        FROM employees e
+        LEFT JOIN tickets t ON t.assigned_to = e.name
+        GROUP BY e.name
+        ORDER BY cnt ASC, e.name ASC
+        LIMIT 1
+    """)
+    row = cur.fetchone()
+    return row["name"] if row else None
+
+
 def enrich_ticket(ticket_id: int):
     conn = get_db_connection()
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT id, body, tags
+        SELECT id, body, tags, status
         FROM tickets
         WHERE id = %s AND enrichment_done = FALSE
     """, (ticket_id,))
@@ -27,16 +41,26 @@ def enrich_ticket(ticket_id: int):
 
     print(f"Enriching ticket {ticket_id}")
 
-    source = detect_source(t["tags"])
+    source = detect_source(t["body"])
     ai_subject = generate_ai_subject(t["body"])
+    language = detect_language(t["body"])
+    assigned_to = get_next_assignee(cur)
+
+    # Only generate a suggested response for non-closed tickets
+    suggested_response = None
+    if t["status"] != "closed":
+        suggested_response = generate_suggested_response(t["body"])
 
     cur.execute("""
         UPDATE tickets
         SET source=%s,
             ai_subject=%s,
+            language=%s,
+            assigned_to=%s,
+            suggested_response=%s,
             enrichment_done=TRUE
         WHERE id=%s
-    """, (source, ai_subject, ticket_id))
+    """, (source, ai_subject, language, assigned_to, suggested_response, ticket_id))
 
     conn.commit()
     cur.close()

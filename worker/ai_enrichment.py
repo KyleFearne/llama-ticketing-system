@@ -1,11 +1,38 @@
 from ollama_client import ask_llm
 
 
-def detect_source(body):
-    if "MOBILE" in body:
+def detect_source(body: str) -> str:
+    if "MOBILE:" in body:
         return "Mobile"
-    else:
-        return "Webapp"
+    return "Webapp"
+
+
+def detect_language(body: str) -> str:
+    prompt = f"""What language is the following text written in? Reply with ONLY the language name in English (e.g. English, Spanish, French, German). Nothing else.
+
+Text:
+{body}
+
+Language:""".strip()
+
+    out = ask_llm(prompt).strip()
+    return out.splitlines()[0].strip()
+
+
+def generate_suggested_response(body: str) -> str:
+    prompt = f"""You are a customer support agent. Write a helpful, professional response to the following support ticket.
+
+Rules:
+- Use the SAME language the ticket is written in.
+- Be concise and helpful.
+- Output ONLY the response text, nothing else.
+
+Ticket:
+{body}
+
+Response:""".strip()
+
+    return ask_llm(prompt).strip()
 
 
 def generate_ai_subject(body: str) -> str:
