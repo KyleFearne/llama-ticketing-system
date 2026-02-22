@@ -1,16 +1,11 @@
 from ollama_client import ask_llm
 
 
-def detect_source(tags):
-    if not tags:
-        return "webapp"
-
-    tags_lower = [t.lower() for t in tags]
-
-    if "mobile" in tags_lower:
-        return "mobile"
-
-    return "webapp"
+def detect_source(body):
+    if "MOBILE" in body:
+        return "Mobile"
+    else:
+        return "Webapp"
 
 
 def generate_ai_subject(body: str) -> str:
@@ -20,10 +15,11 @@ You are a support agent.
 Task: Write a concise subject line for the ticket below.
 
 Rules (MUST follow):
-- Use the SAME language as the ticket.
+- Use the SAME language that the ticket is written in. 
+- eg. if the ticket is in Spanish, write the subject in Spanish. If the ticket is in English, write the subject in English. If ticket is in German, write the subject in German. Same logic for other languages.
 - Output ONLY the subject line (no quotes, no bullets, no extra text).
-- Max 8 words.
-- Do not add alternatives or explanations.
+- Maximum subject length 10 words.
+- Do not add alternatives or explanations. Nothing EXTRA, just the new subject.
 
 Ticket:
 {body}

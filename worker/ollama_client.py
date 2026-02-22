@@ -7,7 +7,7 @@ def ask_llm(prompt: str) -> str:
     response = requests.post(
         OLLAMA_URL,
         json={
-            "model": "llama3.2",
+            "model": "llama3.2:8b",
             "messages": [
                 {"role": "user", "content": prompt}
             ],

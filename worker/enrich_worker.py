@@ -23,7 +23,7 @@ def run():
 
             print(f"Enriching ticket {ticket_id}")
 
-            source = detect_source(tags)
+            source = detect_source(body)
             ai_subject = generate_ai_subject(body)
 
             cur.execute("""
