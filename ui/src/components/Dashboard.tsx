@@ -31,17 +31,23 @@ export default function Dashboard() {
   }
   const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
 
-  // Count by assignee (only tickets with a suggested_assignee)
+  // Count by assigned_to
   const assigneeCounts: Record<string, number> = {};
   for (const t of tickets) {
-    if (t.suggested_assignee) {
-      assigneeCounts[t.suggested_assignee] =
-        (assigneeCounts[t.suggested_assignee] ?? 0) + 1;
+    if (t.assigned_to) {
+      assigneeCounts[t.assigned_to] = (assigneeCounts[t.assigned_to] ?? 0) + 1;
     }
   }
-  const sortedAssignees = Object.entries(assigneeCounts).sort(
-    (a, b) => b[1] - a[1]
-  );
+  const sortedAssignees = Object.entries(assigneeCounts).sort((a, b) => b[1] - a[1]);
+
+  // Count by language
+  const languageCounts: Record<string, number> = {};
+  for (const t of tickets) {
+    if (t.language) {
+      languageCounts[t.language] = (languageCounts[t.language] ?? 0) + 1;
+    }
+  }
+  const sortedLanguages = Object.entries(languageCounts).sort((a, b) => b[1] - a[1]);
 
   // Recent tickets
   const recentTickets = [...tickets]
@@ -187,6 +193,34 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Languages */}
+          {sortedLanguages.length > 0 && (
+            <div>
+              <h2 className="text-base font-semibold text-slate-700 mb-3">By Language</h2>
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {sortedLanguages.map(([lang, count], i) => {
+                  const pct = tickets.length > 0 ? Math.round((count / tickets.length) * 100) : 0;
+                  return (
+                    <Link
+                      key={lang}
+                      to={`/inbox?language=${encodeURIComponent(lang)}`}
+                      className={`flex items-center gap-4 px-5 py-3 hover:bg-slate-50 transition-colors ${i !== 0 ? "border-t border-slate-100" : ""}`}
+                    >
+                      <span className="w-32 text-sm font-medium text-slate-700 truncate">🌐 {lang}</span>
+                      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-violet-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-8 text-right text-sm font-semibold text-slate-600">{count}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Recent activity */}
           {recentTickets.length > 0 && (
             <div>
@@ -201,7 +235,7 @@ export default function Dashboard() {
                       className={`flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors ${i !== 0 ? "border-t border-slate-100" : ""}`}
                     >
                       <span className={`h-2 w-2 rounded-full flex-shrink-0 ${m.dot}`} />
-                      <span className="flex-1 text-sm font-medium text-slate-800 truncate">{cleanAiSubject(t.ai_subject, t.subject)}</span>
+                      <span className="flex-1 text-sm font-medium text-slate-800 truncate">{cleanAiSubject(t.ai_subject)}</span>
                       <span className={`text-xs font-semibold ${m.color}`}>{m.label}</span>
                       <span className="text-xs text-slate-400 whitespace-nowrap">
                         {new Date(t.created_at).toLocaleDateString()}

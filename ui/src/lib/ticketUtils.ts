@@ -1,13 +1,19 @@
+export type Employee = {
+  id: number;
+  name: string;
+};
+
 export type Ticket = {
   id: number;
-  subject: string;
   body: string;
   tags: string[];
   status: string;
   source?: string | null;
   ai_subject?: string | null;
   category?: string | null;
-  suggested_assignee?: string | null;
+  language?: string | null;
+  assigned_to?: string | null;
+  suggested_response?: string | null;
   created_at: string;
 };
 
@@ -17,33 +23,55 @@ export async function fetchTickets(): Promise<Ticket[]> {
   return res.json();
 }
 
+export async function fetchEmployees(): Promise<Employee[]> {
+  const res = await fetch("/api/employees");
+  if (!res.ok) throw new Error("Failed to fetch employees");
+  return res.json();
+}
+
+export async function updateTicket(
+  id: number,
+  data: { status?: string; assigned_to?: string }
+): Promise<Ticket> {
+  const res = await fetch(`/api/tickets/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update ticket");
+  return res.json();
+}
+
 /**
  * Returns the best display title for a ticket.
- * - Prefers ai_subject when present.
- * - Strips verbose AI preambles (e.g. "Here is a rewritten subject…\n\n\"Actual Subject\"")
- *   by taking the last non-empty line and removing surrounding quotation marks.
- * - Falls back to the raw subject if ai_subject is absent or empty.
+ * Prefers ai_subject when present, stripping any verbose AI preamble.
+ * Falls back to "#<id>" if ai_subject is absent.
  */
 export function cleanAiSubject(
   aiSubject: string | null | undefined,
-  subject: string
+  fallback?: string
 ): string {
-  if (!aiSubject?.trim()) return subject;
+  if (!aiSubject?.trim()) return fallback ?? "Untitled";
   const lines = aiSubject.split("\n").map((l) => l.trim()).filter(Boolean);
   const last = lines[lines.length - 1];
   const cleaned = last.replace(/^["""''']+|["""''']+$/g, "").trim();
-  return cleaned || subject;
+  return cleaned || fallback || "Untitled";
 }
 
 export const STATUS_META: Record<
   string,
   { label: string; color: string; bg: string; pill: string; dot: string }
 > = {
-  open:     { label: "Open",     color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",  pill: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
-  pending:  { label: "Pending",  color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",      pill: "bg-amber-100 text-amber-700",    dot: "bg-amber-500"   },
-  closed:   { label: "Closed",   color: "text-slate-600",   bg: "bg-slate-50 border-slate-200",      pill: "bg-slate-100 text-slate-600",    dot: "bg-slate-400"   },
-  resolved: { label: "Resolved", color: "text-blue-700",    bg: "bg-blue-50 border-blue-200",        pill: "bg-blue-100 text-blue-700",      dot: "bg-blue-500"    },
+  new:          { label: "New",         color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",  pill: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+  "in-progress":{ label: "In Progress", color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",      pill: "bg-amber-100 text-amber-700",    dot: "bg-amber-500"   },
+  closed:       { label: "Closed",      color: "text-slate-600",   bg: "bg-slate-50 border-slate-200",      pill: "bg-slate-100 text-slate-600",    dot: "bg-slate-400"   },
+  // legacy statuses for backward compatibility
+  open:         { label: "Open",        color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",  pill: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+  pending:      { label: "Pending",     color: "text-amber-700",   bg: "bg-amber-50 border-amber-200",      pill: "bg-amber-100 text-amber-700",    dot: "bg-amber-500"   },
+  resolved:     { label: "Resolved",    color: "text-blue-700",    bg: "bg-blue-50 border-blue-200",        pill: "bg-blue-100 text-blue-700",      dot: "bg-blue-500"    },
 };
+
+export const EDITABLE_STATUSES = ["new", "in-progress", "closed"] as const;
 
 export function defaultMeta(status: string) {
   return {
