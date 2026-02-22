@@ -17,8 +17,20 @@ class Ticket(BaseModel):
     language: Optional[str] = None
     assigned_to: Optional[str] = None
     suggested_response: Optional[str] = None
+    troubleshooting_steps: Optional[str] = None
     created_at: datetime
 
 class TicketUpdate(BaseModel):
     status: Optional[str] = None
     assigned_to: Optional[str] = None
+
+class TicketMessage(BaseModel):
+    id: int
+    ticket_id: int
+    author: str
+    body: str
+    created_at: datetime
+
+class TicketMessageCreate(BaseModel):
+    author: str
+    body: str

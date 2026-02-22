@@ -1,12 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Ticket,
   Employee,
+  TicketMessage,
   fetchTickets,
   fetchEmployees,
   updateTicket,
+  fetchTicketMessages,
+  postTicketMessage,
   cleanAiSubject,
   STATUS_META,
   EDITABLE_STATUSES,
@@ -61,6 +64,9 @@ export default function TicketInbox() {
   const [selectedId, setSelectedId] = useState<number | null>(
     selectedParam ? Number(selectedParam) : null
   );
+  const [messageText, setMessageText] = useState("");
+  const [messageAuthor, setMessageAuthor] = useState("Agent");
+  const threadEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (filterStatus) setActiveStatus(filterStatus);
@@ -83,7 +89,7 @@ export default function TicketInbox() {
     if (search) {
       const q = search.toLowerCase();
       return (
-        cleanAiSubject(t.ai_subject).toLowerCase().includes(q) ||
+        cleanAiSubject(t.ai_subject, t.id).toLowerCase().includes(q) ||
         t.body.toLowerCase().includes(q) ||
         (t.tags ?? []).some((tag) => tag.toLowerCase().includes(q))
       );
@@ -92,6 +98,27 @@ export default function TicketInbox() {
   });
 
   const selected = filtered.find((t) => t.id === selectedId) ?? filtered[0] ?? null;
+
+  // Fetch conversation thread for selected ticket
+  const { data: messages = [] } = useQuery<TicketMessage[]>({
+    queryKey: ["messages", selected?.id],
+    queryFn: () => fetchTicketMessages(selected!.id),
+    enabled: selected != null,
+  });
+
+  // Scroll thread to bottom when messages change
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = useMutation({
+    mutationFn: ({ ticketId, author, body }: { ticketId: number; author: string; body: string }) =>
+      postTicketMessage(ticketId, author, body),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["messages", vars.ticketId] });
+      setMessageText("");
+    },
+  });
 
   function selectTicket(id: number) {
     setSelectedId(id);
@@ -203,7 +230,7 @@ export default function TicketInbox() {
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <span className="text-sm font-semibold text-slate-800 line-clamp-1 flex-1">
-                    {cleanAiSubject(ticket.ai_subject)}
+                    {cleanAiSubject(ticket.ai_subject, ticket.id)}
                   </span>
                   <span className="text-xs text-slate-400 whitespace-nowrap">{timeAgo(ticket.created_at)}</span>
                 </div>
@@ -249,7 +276,7 @@ export default function TicketInbox() {
                 <span className="text-xs text-slate-400">#{selected.id}</span>
               </div>
               <h1 className="text-xl font-bold text-slate-900">
-                {cleanAiSubject(selected.ai_subject)}
+                {cleanAiSubject(selected.ai_subject, selected.id)}
               </h1>
             </div>
 
@@ -338,15 +365,99 @@ export default function TicketInbox() {
               </div>
             </div>
 
-            {/* Suggested Response (only for non-closed tickets) */}
-            {selected.status !== "closed" && selected.suggested_response && (
-              <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Suggested Response</p>
+            {/* Troubleshooting Steps */}
+            {selected.status !== "closed" && selected.troubleshooting_steps && (
+              <div className="mb-6">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+                  🔧 Troubleshooting Steps
+                </p>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {selected.troubleshooting_steps}
+                </div>
+              </div>
+            )}
+
+            {/* Suggested Response */}
+            {selected.suggested_response && (
+              <div className="mb-6">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+                  {selected.status === "closed" ? "📋 Follow-up Response" : "💬 Suggested Response"}
+                </p>
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                   {selected.suggested_response}
                 </div>
               </div>
             )}
+
+            {/* Conversation Thread */}
+            <div className="mb-2">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">
+                🗨 Conversation Thread
+              </p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                {messages.length === 0 ? (
+                  <p className="px-5 py-4 text-sm text-slate-400 italic">No messages yet.</p>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {messages.map((msg) => {
+                      const isAgent = msg.author !== "Customer";
+                      return (
+                        <div key={msg.id} className={`px-5 py-4 ${isAgent ? "bg-white" : "bg-slate-50"}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs font-semibold ${isAgent ? "text-indigo-700" : "text-slate-600"}`}>
+                              {msg.author}
+                            </span>
+                            <span className="text-xs text-slate-400">{timeAgo(msg.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{msg.body}</p>
+                        </div>
+                      );
+                    })}
+                    <div ref={threadEndRef} />
+                  </div>
+                )}
+
+                {/* Compose */}
+                <div className="border-t border-slate-200 bg-white p-4">
+                  <div className="flex gap-2 mb-2">
+                    <select
+                      value={messageAuthor}
+                      onChange={(e) => setMessageAuthor(e.target.value)}
+                      aria-label="Message author"
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                    >
+                      <option value="Agent">Agent</option>
+                      <option value="Customer">Customer</option>
+                      {employees.map((emp) => (
+                        <option key={emp.id} value={emp.name}>{emp.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <label htmlFor="compose-message" className="sr-only">Reply message</label>
+                  <textarea
+                    id="compose-message"
+                    rows={3}
+                    placeholder="Type a reply…"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 placeholder-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button
+                      disabled={!messageText.trim() || sendMessage.isPending}
+                      onClick={() => {
+                        if (messageText.trim()) {
+                          sendMessage.mutate({ ticketId: selected.id, author: messageAuthor, body: messageText.trim() });
+                        }
+                      }}
+                      className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {sendMessage.isPending ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

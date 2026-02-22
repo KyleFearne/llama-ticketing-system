@@ -14,6 +14,15 @@ export type Ticket = {
   language?: string | null;
   assigned_to?: string | null;
   suggested_response?: string | null;
+  troubleshooting_steps?: string | null;
+  created_at: string;
+};
+
+export type TicketMessage = {
+  id: number;
+  ticket_id: number;
+  author: string;
+  body: string;
   created_at: string;
 };
 
@@ -42,20 +51,41 @@ export async function updateTicket(
   return res.json();
 }
 
+export async function fetchTicketMessages(ticketId: number): Promise<TicketMessage[]> {
+  const res = await fetch(`/api/tickets/${ticketId}/messages`);
+  if (!res.ok) throw new Error("Failed to fetch messages");
+  return res.json();
+}
+
+export async function postTicketMessage(
+  ticketId: number,
+  author: string,
+  body: string
+): Promise<TicketMessage> {
+  const res = await fetch(`/api/tickets/${ticketId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ author, body }),
+  });
+  if (!res.ok) throw new Error("Failed to post message");
+  return res.json();
+}
+
 /**
  * Returns the best display title for a ticket.
  * Prefers ai_subject when present, stripping any verbose AI preamble.
- * Falls back to "#<id>" if ai_subject is absent.
+ * Falls back to "NEW TICKET #<id>" (or "NEW TICKET" if id not provided).
  */
 export function cleanAiSubject(
   aiSubject: string | null | undefined,
-  fallback?: string
+  id?: number
 ): string {
-  if (!aiSubject?.trim()) return fallback ?? "Untitled";
+  const fallback = id != null ? `NEW TICKET #${id}` : "NEW TICKET";
+  if (!aiSubject?.trim()) return fallback;
   const lines = aiSubject.split("\n").map((l) => l.trim()).filter(Boolean);
   const last = lines[lines.length - 1];
   const cleaned = last.replace(/^["""''']+|["""''']+$/g, "").trim();
-  return cleaned || fallback || "Untitled";
+  return cleaned || fallback;
 }
 
 export const STATUS_META: Record<
