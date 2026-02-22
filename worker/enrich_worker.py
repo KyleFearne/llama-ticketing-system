@@ -13,17 +13,17 @@ RECONCILE_AFTER = 6  # exactly 60 seconds of idle time (6 × 10s timeout)
 
 
 def get_next_assignee(cur):
-    """Return the name of the employee with the fewest assigned tickets."""
+    """Return the id of the employee with the fewest assigned tickets."""
     cur.execute("""
-        SELECT e.name, COUNT(t.id) AS cnt
+        SELECT e.id, e.name, COUNT(t.id) AS cnt
         FROM employees e
-        LEFT JOIN tickets t ON t.assigned_to = e.name
-        GROUP BY e.name
+        LEFT JOIN tickets t ON t.assigned_to = e.id
+        GROUP BY e.id, e.name
         ORDER BY cnt ASC, e.name ASC
         LIMIT 1
     """)
     row = cur.fetchone()
-    return row["name"] if row else None
+    return row["id"] if row else None
 
 
 def enrich_ticket(ticket_id: int):
