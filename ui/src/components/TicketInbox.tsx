@@ -47,7 +47,7 @@ export default function TicketInbox() {
   });
 
   const patchTicket = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { status?: string; assigned_to?: string } }) =>
+    mutationFn: ({ id, data }: { id: number; data: { status?: string; assigned_to?: string | null } }) =>
       updateTicket(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
@@ -303,7 +303,7 @@ export default function TicketInbox() {
                 <select
                   value={selected.assigned_to ?? ""}
                   onChange={(e) =>
-                    patchTicket.mutate({ id: selected.id, data: { assigned_to: e.target.value || undefined } })
+                    patchTicket.mutate({ id: selected.id, data: { assigned_to: e.target.value || null } })
                   }
                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                 >

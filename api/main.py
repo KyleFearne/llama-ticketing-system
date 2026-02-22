@@ -151,15 +151,19 @@ def update_ticket(ticket_id: int, update: TicketUpdate):
     fields = {}
     if update.status is not None:
         fields["status"] = update.status
-    if update.assigned_to is not None:
-        # Resolve employee name to FK integer id
-        cur.execute("SELECT id FROM employees WHERE name = %s", (update.assigned_to,))
-        emp_row = cur.fetchone()
-        if emp_row is None:
-            cur.close()
-            conn.close()
-            raise HTTPException(status_code=400, detail="Employee not found")
-        fields["assigned_to"] = emp_row["id"]
+    if "assigned_to" in update.model_fields_set:
+        if update.assigned_to:
+            # Resolve employee name to FK integer id
+            cur.execute("SELECT id FROM employees WHERE name = %s", (update.assigned_to,))
+            emp_row = cur.fetchone()
+            if emp_row is None:
+                cur.close()
+                conn.close()
+                raise HTTPException(status_code=400, detail="Employee not found")
+            fields["assigned_to"] = emp_row["id"]
+        else:
+            # Explicitly cleared — set FK to NULL
+            fields["assigned_to"] = None
 
     # Validate all keys are in the allowed set (defence-in-depth)
     if not fields:
