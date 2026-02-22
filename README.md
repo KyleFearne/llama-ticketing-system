@@ -2,6 +2,8 @@
 
 An AI-powered support ticketing system that ingests ticket files, enriches them with an LLM (Llama 3.1), and exposes a React dashboard for managing tickets.
 
+Excalidraw Diagrams: [here](https://excalidraw.com/#json=E3tQFB9NZNT65czlTlBrO,FtDa7QtD08YNc-0Ap-09EQ)
+
 ## Architecture
 
 ```
@@ -54,7 +56,7 @@ An AI-powered support ticketing system that ingests ticket files, enriches them 
 
 ---
 
-## Setting Up Ollama and Llama 3.2
+## Setting Up Ollama and Llama 3.1:8b
 
 The `enrich_worker` communicates with Ollama over `http://host.docker.internal:11434`, which resolves to the host machine from inside the Docker containers (works out-of-the-box on Docker Desktop for Mac/Windows; Linux users see the note below).
 
