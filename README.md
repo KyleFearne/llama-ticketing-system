@@ -109,10 +109,17 @@ git clone https://github.com/KyleFearne/llama-ticketing-system.git
 cd llama-ticketing-system
 ```
 
-### 2. Start all services
+### 2. Create the ticket data directory
 
 ```bash
-docker compose up --build
+mkdir -p data/tickets
+```
+
+### 3. Start all services
+
+```bash
+docker compose build --no-cache --pull
+docker compose up
 ```
 
 Docker Compose will:
@@ -120,11 +127,11 @@ Docker Compose will:
 2. Run `init_db` to create the schema and our 4 seed employees.
 3. Start the `api`, `live_ingest_worker`, `enrich_worker`, and `ui` services.
 
-### 3. Open the dashboard
+### 4. Open the dashboard
 
 Navigate to [http://localhost:3000](http://localhost:3000).
 
-### 4. Add tickets as necessary
+### 5. Add tickets as necessary
 
 Drop `.txt` ticket files into `./data/tickets/`. The `live_ingest_worker` polls this directory every 5 seconds and automatically ingests new files.
 
